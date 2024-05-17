@@ -37,3 +37,9 @@ US indexes."
 '''
 
 company_df = company_df[company_df['marketCap'] >= 30e6]
+
+
+'''
+Condition 4: "Companies with less than an absolute 5% of shares available will be removed from eligibility."
+'''
+

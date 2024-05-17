@@ -5,6 +5,10 @@ import time
 
 start_time = time.time()
 
+'''
+Gather the list of tickers from yahoo_fin.
+'''
+
 sp500_tickers = si.tickers_sp500()
 nasdaq_tickers = si.tickers_nasdaq()
 dow_tickers = si.tickers_dow()
@@ -17,8 +21,11 @@ num_tickers = len(all_tickers)
 print(f"Total number of unique tickers: {num_tickers}")
 
 
-data = []
+'''
+Check yfinance for ticker data and add it to the table.
+'''
 
+data = []
 
 for i, ticker in enumerate(all_tickers):
     print(f"{i} / {num_tickers}")
