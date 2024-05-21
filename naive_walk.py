@@ -3,6 +3,7 @@ import yfinance as yf
 from scipy.stats import lognorm
 import matplotlib.pyplot as plt
 import pandas as pd
+from datetime import datetime, timedelta
 
 
 
@@ -52,22 +53,64 @@ def exceed_above_p(distribution: lognorm, target: float):
 # print(decrease_below_p(distribution=dist, target=1300))
 # print(exceed_above_p(distribution=dist, target=1600))
 
-stock_data = pd.read_csv("filtered_companies.csv")
+stock_data = pd.read_csv("filtered_companies.csv", low_memory=False)
+
+stock_data = stock_data.sort_values('marketCap', ascending=False)
 
 baseline = stock_data.iloc[3000]['marketCap']
 
 include = []
 exclude = []
 
-for i in range(2900, 3100):
+for i in range(2970, 3030):
     company = stock_data.iloc[i]['symbol']
-    current_price = stock_data.iloc[i]['marketCap']
-    dist = walk(current_price, 100, 0, 0.1)
+    current_cap = stock_data.iloc[i]['marketCap']
+    shares_outstanding = stock_data.iloc[i]['sharesOutstanding']
+    
+    end_date = datetime.today()
+    start_date = end_date - timedelta(days=50)
+
+    historical_data = yf.download(company, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
+    historical_data['marketCaps'] = historical_data['Adj Close'] * shares_outstanding
+
+    historical_data['marketCapReturn'] = historical_data['marketCaps'].pct_change()
+
+    market_cap_volatility = historical_data['marketCapReturn'].std()
+    
+
+    dist = walk(current_cap, 100, 0, market_cap_volatility**2)
     include.append((company, exceed_above_p(dist, baseline)))
     exclude.append((company, decrease_below_p(dist, baseline)))
 
 print(include)
 print(exclude)
+
+tickers = [item[0] for item in include]
+values = [item[1] for item in include]
+
+colors = []
+for ticker, value in include:
+    current_cap = stock_data.loc[stock_data['symbol'] == ticker, 'marketCap'].values[0]
+    if current_cap >= baseline and value >= 0.6: # began above baseline and likely to stay
+        print("over")
+        colors.append("grey")
+    elif current_cap >= baseline and value < 0.4: # began above baseline and likely to leave
+        print("over2")
+        colors.append("red")
+    elif current_cap < baseline and value >= 0.4: # began below baseline and likely to join
+        print("under")
+        colors.append("green")
+    elif current_cap < baseline and value < 0.6: # began below baseline and likely to stay
+        print("under2")
+        colors.append("grey")
+
+plt.figure(figsize=(15, 7))
+plt.bar(tickers, values, color=colors)
+
+plt.xlabel("Tickers")
+plt.ylabel("Probability of being included")
+plt.xticks(rotation=90)
+plt.show()
 
 
 
