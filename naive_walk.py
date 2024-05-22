@@ -13,7 +13,7 @@ Returns the interval of possible values and the corresponding distribution over 
 """
 def walk(start: float, time_elapsed: int, mean: float, var: float):
     start_mean = np.log(start) + time_elapsed * mean
-    log_var = np.sqrt(time_elapsed) * var
+    log_var = time_elapsed * var
 
     dist = lognorm(s=log_var, scale=np.exp(start_mean))
 
