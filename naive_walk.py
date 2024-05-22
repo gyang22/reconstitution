@@ -78,7 +78,7 @@ for i in range(2970, 3030):
     market_cap_volatility = historical_data['marketCapReturn'].std()
     
 
-    dist = walk(current_cap, 100, 0, market_cap_volatility**2)
+    dist = walk(current_cap, 150, 0, market_cap_volatility**2)
     include.append((company, exceed_above_p(dist, baseline)))
     exclude.append((company, decrease_below_p(dist, baseline)))
 
@@ -88,21 +88,21 @@ print(exclude)
 tickers = [item[0] for item in include]
 values = [item[1] for item in include]
 
+def get_gradient_color(value, min_value, max_value, color1, color2):
+    ratio = (value - min_value) / (max_value - min_value)
+    color = plt.cm.RdYlGn(ratio)  # Use a colormap for the gradient (e.g., RdYlGn for red to green)
+    return color
+
+min_value = 0.0
+max_value = 1.0
 colors = []
 for ticker, value in include:
     current_cap = stock_data.loc[stock_data['symbol'] == ticker, 'marketCap'].values[0]
-    if current_cap >= baseline and value >= 0.6: # began above baseline and likely to stay
-        print("over")
-        colors.append("grey")
-    elif current_cap >= baseline and value < 0.4: # began above baseline and likely to leave
-        print("over2")
-        colors.append("red")
-    elif current_cap < baseline and value >= 0.4: # began below baseline and likely to join
-        print("under")
-        colors.append("green")
-    elif current_cap < baseline and value < 0.6: # began below baseline and likely to stay
-        print("under2")
-        colors.append("grey")
+    if current_cap >= baseline: # began above baseline and likely to stay
+        colors.append(get_gradient_color(value, min_value, max_value, 'red', 'grey'))
+    elif current_cap < baseline: # began below baseline and likely to join
+        colors.append(get_gradient_color(value, min_value, max_value, 'grey', 'green'))
+
 
 plt.figure(figsize=(15, 7))
 plt.bar(tickers, values, color=colors)
