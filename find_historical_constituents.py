@@ -15,6 +15,6 @@ def rtf_to_csv(rtf_file_path, csv_file_path):
         csv_file.write(csv_content)
 
 # Example usage
-rtf_file_path = 'SPY_constituents.rtf'
-csv_file_path = 'SPY_constituents.csv'
+rtf_file_path = 'data/VUG_constituents.rtf'
+csv_file_path = 'data/VUG_constituents.csv'
 rtf_to_csv(rtf_file_path, csv_file_path)
