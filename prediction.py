@@ -57,7 +57,7 @@ for symbol in VUG_companies['Symbol'].unique():
         features = []
 
         # record the resulting weight
-        labels.append(row['Weight'])
+        labels.append(row['Weight'] * 100)
 
         # include present close and volume
         features.append(stock_info.loc[data_date]['Adj Close'])
@@ -74,19 +74,38 @@ for symbol in VUG_companies['Symbol'].unique():
         x.append(features)
 
 
-
+print(x)
 print(len(x))
 print(len(labels))
+
+
 
 
 # Convert data to tensors
 x_tensor = torch.tensor(x, dtype=torch.float32)
 labels_tensor = torch.tensor(labels, dtype=torch.float32).view(-1, 1)
 
-# Normalize the features
-x_mean = x_tensor.mean(dim=0, keepdim=True)
-x_std = x_tensor.std(dim=0, keepdim=True)
-x_tensor = (x_tensor - x_mean) / (x_std + 1e-8)
+
+nan_in_x = torch.isnan(x_tensor).any()
+inf_in_x = torch.isinf(x_tensor).any()
+nan_in_labels = torch.isnan(labels_tensor).any()
+inf_in_labels = torch.isinf(labels_tensor).any()
+
+if nan_in_x or inf_in_x or nan_in_labels or inf_in_labels:
+    print("Input tensor contains NaNs or Infs")
+    print(f"NaNs in x_tensor: {nan_in_x}, Infs in x_tensor: {inf_in_x}")
+    print(f"NaNs in labels_tensor: {nan_in_labels}, Infs in labels_tensor: {inf_in_labels}")
+    
+    # Option 2: Remove rows with NaNs or Infs
+    combined_mask = ~torch.isnan(x_tensor).any(dim=1) & ~torch.isinf(x_tensor).any(dim=1) & \
+                ~torch.isnan(labels_tensor).any(dim=1) & ~torch.isinf(labels_tensor).any(dim=1)
+
+    # Apply the combined mask to both tensors
+    x_tensor = x_tensor[combined_mask]
+    labels_tensor = labels_tensor[combined_mask]
+
+
+
 
 # Split the dataset into training and testing sets
 x_train, x_test, y_train, y_test = train_test_split(x_tensor, labels_tensor, test_size=0.2, random_state=42)
@@ -100,7 +119,15 @@ test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
 
 model = LinearRegressionNet(feature_size=x_tensor.shape[1])
 loss_func = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+
+def weights_init(m):
+    if isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+
+model.apply(weights_init)
 
 num_epochs = 100
 for epoch in range(num_epochs):
@@ -108,6 +135,7 @@ for epoch in range(num_epochs):
     for batch_x, batch_labels in train_loader:
         optimizer.zero_grad()  # Zero the gradients
         outputs = model(batch_x)  # Forward pass
+        #print(f"output: {outputs}")
         loss = loss_func(outputs, batch_labels)  # Compute the loss
         if torch.isnan(loss):
             print("Loss is NaN. Exiting...")
