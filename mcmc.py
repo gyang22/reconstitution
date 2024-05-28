@@ -5,149 +5,138 @@ import yfinance as yf
 import time
 import plotly.express as px
 import plotly.graph_objects as go
-
-
-start_time = time.time()
-
-
-filtered_companies = pd.read_csv("data/CRSP_filtered_companies.csv")
-
-potential_tickers = list(filtered_companies['symbol'].unique())
-
-start_date = "2024-03-20"
-end_date = "2024-04-30"
-
-historical_data = {}
-
-for ticker in potential_tickers:
-    try:
-        data = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
-        if not data.empty:
-            historical_data[ticker] = data
-            print(f"Data found for {ticker}.")
-        else:
-            print(f"No data for {ticker}.")
-    except Exception as e:
-        print(f"Error occurred downloading data for {ticker}: {e}")
-
-
-daily_returns = {}
-for ticker, data in historical_data.items():
-    if not data.empty:
-        daily_returns[ticker] = data.pct_change().dropna()
+from datetime import timedelta
+from datetime import datetime
 
 
 
-mean_daily_returns = {}
-daily_volatility = {}
+class MCMCIndexPredictor:
 
-for ticker, returns in daily_returns.items():
-    mean_daily_returns[ticker] = returns.mean()
-    daily_volatility[ticker] = returns.std()
-
-
-mean_daily_returns = pd.Series(mean_daily_returns)
-daily_volatility = pd.Series(daily_volatility)
-
-print("Mean Daily Returns:")
-print(mean_daily_returns)
-print("\nDaily Volatility:")
-print(daily_volatility)
-
-
-def possible_price_paths(current_price, mu, sigma, num_days, num_simulations):
-    # initiate price movement paths
-    dt = 1 / num_days
-    price_paths = np.zeros((num_days, num_simulations))
-    price_paths[0] = current_price
-
-    # simulate movements
-    for t in range(1, num_days):
-        rand = np.random.normal(0, 1, num_simulations)
-        price_paths[t] = price_paths[t - 1] * np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * rand)
+    breakpoints = {
+        'Mega': 0.70,
+        'Mid': 0.85,  
+        'Small': 0.98,  
+        'Micro': 1.00  
+    }
     
-    return price_paths
+    def __init__(self, universe: pd.DataFrame, num_days: int, num_simulations: int):
+        self.universe = universe
+        self.historical_data = {}
+        self.daily_returns = {}
+        self.mean_daily_returns = None
+        self.daily_volatility = None
+        self.simulated_prices = {}
+        self.simulated_market_caps = {}
+        self.num_days = num_days
+        self.num_simulations = num_simulations
 
-
-simulated_prices = {}
-num_days = 30
-num_simulations = 10000
-
-for ticker in historical_data.keys():
-    current_price = historical_data[ticker].iloc[-1]
-    mu = mean_daily_returns[ticker]
-    sigma = daily_volatility[ticker]
-
-    simulated_prices[ticker] = possible_price_paths(current_price=current_price, mu=mu, sigma=sigma, 
-                                                    num_days=num_days, num_simulations=num_simulations)
-
-
-simulated_market_caps = {}
-
-for ticker, prices in simulated_prices.items():
-    simulated_market_caps[ticker] = prices[-1] * filtered_companies.loc[filtered_companies['symbol'] == ticker, 'sharesOutstanding'].values[0]
-
-print(simulated_market_caps)
-
-def plot_market_caps():
-    for ticker, market_caps in simulated_market_caps.items():
-        plt.figure(figsize=(10, 6))
-        plt.hist(market_caps, bins=50, alpha=0.75)
-        plt.title(f'Simulated Market Capitalizations for {ticker}')
-        plt.xlabel('Market Capitalization')
-        plt.ylabel('Frequency')
-        plt.grid(True)
-        plt.show()
-
-# plot_market_caps()
-
-breakpoints = {
-    'Mega': 0.70,
-    'Mid': 0.85,  
-    'Small': 0.98,  
-    'Micro': 1.00  
-}
-
-def assign_index(market_caps, breakpoints):
-    sorted_companies = sorted(market_caps.items(), key=lambda x: x[1], reverse=True)
-    total_market_cap = sum(market_caps.values())
-    cumulative_cap = 0
     
-    assignments = {}
-    for company, cap in sorted_companies:
-        cumulative_cap_score = (cumulative_cap + 0.5 * cap) / total_market_cap
-        cumulative_cap += cap
-        if cumulative_cap_score <= breakpoints['Mega']:
-            index = 'Mega'
-        elif cumulative_cap_score <= breakpoints['Mid']:
-            index = 'Mid'
-        elif cumulative_cap_score <= breakpoints['Small']:
-            index = 'Small'
-        else:
-            index = 'Micro'
-        assignments[company] = index
+    def get_historical_data(self, start_date, end_date):
+        for ticker in list(self.universe['symbol'].unique()):
+            try:
+                data = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
+                if not data.empty:
+                    self.historical_data[ticker] = data
+                    print(f"Data found for {ticker}.")
+                else:
+                    print(f"No data for {ticker}.")
+            except Exception as e:
+                print(f"Error occurred downloading data for {ticker}: {e}")
+
+    def find_mu_sigma(self):
+        for ticker, data in self.historical_data.items():
+            if not data.empty:
+                self.daily_returns[ticker] = data.pct_change().dropna()
+
+        mean_daily_returns = {}
+        daily_volatility = {}
+
+        for ticker, returns in self.daily_returns.items():
+            mean_daily_returns[ticker] = returns.mean()
+            daily_volatility[ticker] = returns.std()
+
+        self.mean_daily_returns = pd.Series(mean_daily_returns)
+        self.daily_volatility = pd.Series(daily_volatility)
+
+
+    def possible_price_paths(self, current_price, mu, sigma, num_days, num_simulations):
+        # initiate price movement paths
+        dt = 1 / num_days
+        price_paths = np.zeros((num_days, num_simulations))
+        price_paths[0] = current_price
+
+        # simulate movements
+        for t in range(1, num_days):
+            rand = np.random.normal(0, 1, num_simulations)
+            price_paths[t] = price_paths[t - 1] * np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * rand)
+        
+        return price_paths
     
-    return assignments
+    def simulate_market_cap_movement(self):
+        for ticker in self.historical_data.keys():
+            current_price = self.historical_data[ticker].iloc[-1]
+            mu = self.mean_daily_returns[ticker]
+            sigma = self.daily_volatility[ticker]
+
+            self.simulated_prices[ticker] = self.possible_price_paths(current_price=current_price, mu=mu, sigma=sigma, 
+                                                            num_days=self.num_days, num_simulations=self.num_simulations)
+
+        for ticker, prices in self.simulated_prices.items():
+            self.simulated_market_caps[ticker] = prices[-1] * self.universe.loc[self.universe[
+                'symbol'] == ticker, 'sharesOutstanding'].values[0]
+            
+    def assign_index(self, market_caps, breakpoints):
+        sorted_companies = sorted(market_caps.items(), key=lambda x: x[1], reverse=True)
+        total_market_cap = sum(market_caps.values())
+        cumulative_cap = 0
+        
+        assignments = {}
+        for company, cap in sorted_companies:
+            cumulative_cap_score = (cumulative_cap + 0.5 * cap) / total_market_cap
+            cumulative_cap += cap
+            if cumulative_cap_score <= self.breakpoints['Mega']:
+                index = 'Mega'
+            elif cumulative_cap_score <= self.breakpoints['Mid']:
+                index = 'Mid'
+            elif cumulative_cap_score <= self.breakpoints['Small']:
+                index = 'Small'
+            else:
+                index = 'Micro'
+            assignments[company] = index
+        
+        return assignments
+    
+    def find_index_probabilities(self):
+        assignments_list = []
+        for i in range(self.num_simulations):
+            simulated_caps = {ticker: market_caps[i] for ticker, market_caps in self.simulated_market_caps.items()}
+            assignments = self.assign_index(simulated_caps, self.breakpoints)
+            assignments_list.append(assignments)
 
 
-assignments_list = []
-for i in range(num_simulations):
-    simulated_caps = {ticker: market_caps[i] for ticker, market_caps in simulated_market_caps.items()}
-    assignments = assign_index(simulated_caps, breakpoints)
-    assignments_list.append(assignments)
+        assignment_counts = pd.DataFrame(assignments_list).apply(pd.Series.value_counts).fillna(0)
+        assignment_probabilities = assignment_counts / self.num_simulations
+
+        restructured_probabilities = assignment_probabilities.T
+
+        return restructured_probabilities
+    
+    def predict(self, current_date):
+        end_date = current_date.strftime('%Y-%m-%d')
+        start_date = (current_date - timedelta(days=15)).strftime('%Y-%m-%d')
+        self.get_historical_data(start_date, end_date)
+
+        self.find_mu_sigma()
+        self.simulate_market_cap_movement()
+
+        results = self.find_index_probabilities()
+
+        return results
+    
 
 
-assignment_counts = pd.DataFrame(assignments_list).apply(pd.Series.value_counts).fillna(0)
-assignment_probabilities = assignment_counts / num_simulations
 
-restructured_probabilities = assignment_probabilities.T
-
-print(restructured_probabilities)
-print(assignment_probabilities)
-
-restructured_probabilities.to_csv("data/CRSP_index_assignments.csv")
-
-def plot_assignment_probabilities():
+def plot_assignment_probabilities(assignment_probabilities: pd.DataFrame):
     # Prepare data for Plotly
     prob_data = []
     for ticker in assignment_probabilities.index:
@@ -183,15 +172,23 @@ def plot_assignment_probabilities():
         xaxis_tickangle=-45,
         margin=dict(l=0, r=0, t=50, b=100),
         height=600,
-        width=250 * (len(simulated_market_caps.keys()) / 4)  # Adjust width based on number of tickers
+        width=250 * (len(assignment_probabilities.columns) / 4)  # Adjust width based on number of tickers
     )
 
     fig.show()
 
-#plot_assignment_probabilities()
+
+if __name__ == "__main__":
+
+    start_time = time.time()
+
+    filtered_companies = pd.read_csv("data/CRSP_filtered_companies.csv")
 
 
+    model = MCMCIndexPredictor(filtered_companies, 30, 1000)
+    print(model.predict(datetime.today()))
 
-end_time = time.time()
 
-print(f"Runtime: {end_time - start_time} seconds.")
+    end_time = time.time()
+
+    print(f"Runtime: {end_time - start_time} seconds.")
