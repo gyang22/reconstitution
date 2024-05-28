@@ -1,27 +1,34 @@
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
+from datetime import timedelta
+import numpy as np
+
+ticker = "USFD"
+start_date = "2016-05-27"
+end_date = "2016-05-31"
+data = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
+returns = data.pct_change().dropna()
+mean = returns.mean()
+daily_volatility = returns.std()
+print(len(data))
+print(returns)
+print(mean)
+print(daily_volatility)
 
 
-def data_on_date(ticker, date):
-    stock = yf.Ticker(ticker)
-    historical_data = stock.history(start=date, end=date)
-    if not historical_data.empty:
-        return historical_data
+results = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.011538461538461539, 0.011363636363636364, 0.4521072796934866, 0.5348837209302325, 0.5155038759689923, 0.4708171206225681, 0.4897959183673469, 0.5431034482758621, 0.5150214592274678, 0.5596707818930041, 0.5495867768595041, 0.5755102040816327, 0.6307053941908713, 0.6371308016877637, 0.6538461538461539, 0.6652173913043479, 0.7017543859649122, 0.6096491228070176, 0.5964912280701754, 0.5963302752293578, 0.6037735849056604]
 
 
+historical_constituents = pd.read_csv("data/MGC_constituents.csv")
 
-spy_historical_constituents = pd.read_csv("SPY_constituents.csv")
+earliest_date = pd.to_datetime(historical_constituents.iloc[0]['EndTime'])
+latest_date = pd.to_datetime(historical_constituents.iloc[-1]['EndTime'])
 
-spy_historical_constituents = spy_historical_constituents.drop_duplicates()
+result_dates = [d for d in pd.date_range(start=earliest_date, end=latest_date, freq='Q').to_list()]
+backtesting_dates = [d - timedelta(days=30) for d in pd.date_range(start=earliest_date, end=latest_date, freq='Q').to_list()]
 
-unique_dates = spy_historical_constituents['EndTime'].unique()
+print(len(results))
+print(len(backtesting_dates))
 
-ticker_appearances = {}
-
-for date in unique_dates:
-    print(date)
-    current_constituents = spy_historical_constituents[spy_historical_constituents['EndTime'] == date]
-    for ticker in current_constituents['Symbol'].unique():
-        ticker_appearances[ticker] = ticker_appearances.get(ticker, 0) + 1
-
+print(np.mean(results))
