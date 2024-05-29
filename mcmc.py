@@ -7,6 +7,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
 from datetime import datetime
+import os
+import sys
 
 
 
@@ -19,25 +21,45 @@ class MCMCIndexPredictor:
         'Micro': 1.00  
     }
     
-    def __init__(self, universe: pd.DataFrame, num_days: int, num_simulations: int):
+    def __init__(self, universe: pd.DataFrame, num_days: int, num_simulations: int, look_back_days: int):
         self.universe = universe
         self.num_days = num_days
         self.num_simulations = num_simulations
+        self.look_back_days = look_back_days
+
+
+    def suppress_output(func):
+        def wrapper(*args, **kwargs):
+            # Store the default stdout so we can restore it later
+            default_stdout = sys.stdout
+            sys.stdout = open(os.devnull, 'w')
+            result = func(*args, **kwargs)
+            sys.stdout.close()
+            sys.stdout = default_stdout
+            return result
+        return wrapper
+
+    @suppress_output
+    def silent_download(self, ticker, start, end):
+        return yf.download(ticker, start=start, end=end)
 
     
     def get_historical_data(self, start_date, end_date):
         historical_data = {}
-        for ticker in list(self.universe['symbol'].unique()):
+        total = len(self.universe['symbol'].unique())
+        for i, ticker in enumerate(list(self.universe['symbol'].unique())):
+            print(f"Downloading {i + 1} / {total}...")
             try:
-                data = yf.download(ticker, start=start_date, end=end_date)['Adj Close']
+                data = self.silent_download(ticker, start=start_date, end=end_date)['Adj Close']
                 if not data.empty and len(data) > 1:
                     historical_data[ticker] = data
-                    print(f"Data found for {ticker}.")
+                    #print(f"Data found for {ticker}.")
                 else:
-                    print(f"No data for {ticker}.")
+                    pass
+                    #print(f"No data for {ticker}.")
             except Exception as e:
-                print(f"Error occurred downloading data for {ticker}: {e}")
-        
+                #print(f"Error occurred downloading data for {ticker}: {e}")
+                pass
         return historical_data
 
     def find_mu_sigma(self, historical_data):
@@ -137,7 +159,7 @@ class MCMCIndexPredictor:
     
     def predict(self, current_date):
         end_date = current_date.strftime('%Y-%m-%d')
-        start_date = (current_date - timedelta(days=15)).strftime('%Y-%m-%d')
+        start_date = (current_date - timedelta(days=self.look_back_days)).strftime('%Y-%m-%d')
         historical_data = self.get_historical_data(start_date, end_date)
 
         mean_daily_returns, daily_volatility = self.find_mu_sigma(historical_data)
@@ -198,11 +220,12 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    filtered_companies = pd.read_csv("data/CRSP_filtered_companies.csv")
+    filtered_companies = pd.read_csv("data/CRSP_filtered_companies.csv").head(10)
 
 
-    model = MCMCIndexPredictor(filtered_companies, 30, 1000)
-    print(model.predict(datetime.strptime("2016-05-31", '%Y-%m-%d')))
+    model = MCMCIndexPredictor(filtered_companies, 1, 1000, 10)
+    prediction = model.predict(datetime.strptime("2016-05-31", '%Y-%m-%d'))
+    prediction.to_csv("data/CRSP_index_assignments.csv")
 
 
     end_time = time.time()

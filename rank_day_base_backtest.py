@@ -17,12 +17,12 @@ earliest_date = pd.to_datetime(historical_constituents.iloc[0]['EndTime'])
 latest_date = pd.to_datetime(historical_constituents.iloc[-1]['EndTime'])
 
 result_dates = [d for d in pd.date_range(start=earliest_date, end=latest_date, freq='Q').to_list()]
-backtesting_dates = [d - timedelta(days=30) for d in pd.date_range(start=earliest_date, end=latest_date, freq='Q').to_list()]
+backtesting_dates = [d for d in pd.date_range(start=earliest_date, end=latest_date, freq='Q').to_list()]
 
 
 filtered_companies = pd.read_csv("data/CRSP_filtered_companies.csv")
 
-model = MCMCIndexPredictor(universe=filtered_companies, num_days=30, num_simulations=10000, look_back_days=15)
+model = MCMCIndexPredictor(universe=filtered_companies, num_days=1, num_simulations=10000, look_back_days=15)
 
 model_results = []
 for date in backtesting_dates:
