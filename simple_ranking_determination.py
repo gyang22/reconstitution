@@ -22,8 +22,11 @@ for j, date in enumerate(backtesting_dates):
     total_length = len(filtered_companies['symbol'].unique())
     for i, ticker in enumerate(filtered_companies['symbol'].unique()):
         print(f"Date {j + 1} / {num_dates}... downloading {i + 1} / {total_length}...")
-        hist = yf.download(ticker, start=datetime.strftime(date - timedelta(days=10), '%Y-%m-%d'), 
+        try:
+            hist = yf.download(ticker, start=datetime.strftime(date - timedelta(days=10), '%Y-%m-%d'), 
                            end=datetime.strftime(date + timedelta(days=1), '%Y-%m-%d'))
+        except:
+            hist = pd.DataFrame()
         if not hist.empty:
             adj_close_price = hist['Adj Close'].iloc[-1]
         else:
